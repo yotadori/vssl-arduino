@@ -94,10 +94,12 @@ void XboxControllerReceiver::processController(ControllerPtr ctl) {
     vel_.y = -lx * scale_ * 3.0; // Y 軸反転（必要に応じて変更）
     vel_.z = -rx * scale_ / 30.0;
 
+    bool last_kick_flag = kick_flag_;
+
     // RB RT LB LT ボタンでキック
     kick_flag_ = ctl->r1() || ctl->r2() || ctl->l1() || ctl->l2();
 
-    if (kick_flag_)
+    if (kick_flag_ && !last_kick_flag)
     {
         // コントローラーのバイブレーション
         ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */, 0x40 /* strongMagnitude */);
