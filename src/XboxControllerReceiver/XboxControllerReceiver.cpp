@@ -3,41 +3,41 @@
 #include "XboxControllerReceiver.h"
 #include <Arduino.h>
 
-// Bluepad32 のサンプルと同等のコールバック実装をこのファイル内に閉じる
-static ControllerPtr myControllers[BP32_MAX_GAMEPADS];
+static ControllerPtr myController;
 
 // コールバック（接続）
 static void onConnectedController(ControllerPtr ctl) {
-    bool foundEmptySlot = false;
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        if (myControllers[i] == nullptr) {
-            Serial.printf("CALLBACK: Controller is connected, index=%d\n", i);
-            ControllerProperties properties = ctl->getProperties();
-            Serial.printf("Controller model: %s, VID=0x%04x, PID=0x%04x\n",
-                          ctl->getModelName().c_str(), properties.vendor_id, properties.product_id);
-            myControllers[i] = ctl;
-            foundEmptySlot = true;
-            break;
-        }
+
+    if (myController != nullptr) {
+        Serial.println("CALLBACK: Controller already connected. Ignoring.");
+        return;
     }
-    if (!foundEmptySlot) {
-        Serial.println("CALLBACK: Controller connected, but could not found empty slot");
-    }
+
+    ControllerProperties properties = ctl->getProperties();
+
+    Serial.printf(
+        "Controller model: %s, VID=0x%04x, PID=0x%04x\n",
+        ctl->getModelName().c_str(),
+        properties.vendor_id,
+        properties.product_id
+    );
+
+    myController = ctl;
+
+    Serial.println("CALLBACK: First controller connected.");
+
+    // これ以降、新しいBluetooth接続を受け付けない
+    BP32.enableNewBluetoothConnections(false);
 }
 
 // コールバック（切断）
 static void onDisconnectedController(ControllerPtr ctl) {
-    bool foundController = false;
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        if (myControllers[i] == ctl) {
-            Serial.printf("CALLBACK: Controller disconnected from index=%d\n", i);
-            myControllers[i] = nullptr;
-            foundController = true;
-            break;
-        }
-    }
-    if (!foundController) {
-        Serial.println("CALLBACK: Controller disconnected, but not found in myControllers");
+    if (myController == ctl) {
+        Serial.println("Controller disconnected.");
+        myController = nullptr;
+
+        // 再び接続を受け付ける
+        BP32.enableNewBluetoothConnections(true);
     }
 }
 
@@ -49,8 +49,8 @@ XboxControllerReceiver::XboxControllerReceiver() {
     last_updated_time_ = 0;
     activeController_ = nullptr;
 
-    // myControllers を初期化
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) myControllers[i] = nullptr;
+    // myController を初期化
+    myController = nullptr;
 }
 
 // setup: Bluepad32 の初期化とコールバック登録を行う（ここで forgetBluetoothKeys も呼ぶ）
@@ -74,7 +74,13 @@ void XboxControllerReceiver::setup() {
 
 // 内部: 単一コントローラの入力をロボット用データに変換して更新
 void XboxControllerReceiver::processController(ControllerPtr ctl) {
-    if (!ctl) return;
+    if (!ctl || !(ctl->isConnected() && ctl->hasData() && ctl->isGamepad())) {
+        vel_ = {0, 0, 0};
+        kick_flag_ = false;
+        dribble_pow_ = 0;
+
+        return;
+    }
 
     // デッドゾーン適用ラムダ
     auto applyDeadzone = [&](int v)->int {
@@ -111,33 +117,12 @@ void XboxControllerReceiver::processController(ControllerPtr ctl) {
     // Serial.printf("vel: %.1f, %.1f, %.1f, kick=%d, dribble=%d\n", vel_.x, vel_.y, vel_.z, kick_flag_, dribble_pow_);
 }
 
-// 内部: myControllers 配列を走査して最初に見つかったゲームパッドを処理
-void XboxControllerReceiver::processControllers() {
-    activeController_ = nullptr;
-    for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-        ControllerPtr c = myControllers[i];
-        if (c && c->isConnected() && c->hasData() && c->isGamepad()) {
-            activeController_ = c;
-            break;
-        }
-    }
-
-    if (activeController_) {
-        processController(activeController_);
-    } else {
-        // コントローラが無ければゼロクリア（安全のため）
-        vel_ = {0, 0, 0};
-        kick_flag_ = false;
-        dribble_pow_ = 0;
-    }
-}
-
 // update: 毎ループで呼ぶ。BP32.update() を呼び、コントローラ処理を行う
 void XboxControllerReceiver::update() {
     // BP32.update() はここで一度だけ呼ぶ（他で呼ばないこと）
     bool dataUpdated = BP32.update();
     if (dataUpdated) {
-        processControllers();
+        processController(myController);
     } else {
         // 更新が無くても、接続状態の変化を拾いたい場合は processControllers() を常に呼ぶ設計も可能
         // processControllers();
