@@ -30,8 +30,7 @@ void Speaker::update() {
 }
 
 void Speaker::beep(int tone) {
-    static const int tones[] = {0, 262, 294, 330, 349, 392, 440, 494, 523, 587};
-
+    static const int tones[] = {0, 262, 294, 330, 349, 392, 440, 494, 523, 587, 659};
     ledcWriteTone(channel_, tones[tone]);
 }
 
