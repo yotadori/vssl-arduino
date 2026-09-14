@@ -6,7 +6,6 @@
 #include "src/Robot/Robot.h"
 #include "src/Speaker/Speaker.h"
 #include "src/Gyro/Gyro.h"
-#include "src/XboxControllerReceiver/XboxControllerReceiver.h"
 
 // ピン番号
 constexpr int SERVO_PIN = D3;
