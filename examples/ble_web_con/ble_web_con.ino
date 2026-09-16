@@ -131,8 +131,9 @@ void setup()
   // Characteristic
   pCharacteristic =
       pService->createCharacteristic(
-          CHARACTERISTIC_UUID,
-          BLECharacteristic::PROPERTY_WRITE
+        CHARACTERISTIC_UUID,
+        BLECharacteristic::PROPERTY_WRITE |
+        BLECharacteristic::PROPERTY_WRITE_NR
       );
 
   pCharacteristic->setCallbacks(
